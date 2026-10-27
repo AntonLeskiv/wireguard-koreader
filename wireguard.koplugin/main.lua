@@ -2,8 +2,7 @@ local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local UIManager = require("ui/uimanager")
 local InfoMessage = require("ui/widget/infomessage")
 local Notification = require("ui/widget/notification")
-local LuaSettings = require("luasettings")
-local DataStorage = require("datastorage")
+local Dispatcher = require("dispatcher")
 local _ = require("gettext")
 
 local WireGuard = WidgetContainer:extend{
@@ -11,21 +10,13 @@ local WireGuard = WidgetContainer:extend{
     is_doc_only = false,
 }
 
-local function getPluginDir()
-    local src = debug.getinfo(1, "S").source:sub(2)
-    return src:match("(.*/)") or "/mnt/us/koreader/plugins/wireguard.koplugin/"
-end
+local CONTROL_SCRIPT = "./plugins/wireguard.koplugin/bin/wg-control.sh"
 
 function WireGuard:init()
-    self.plugin_dir = getPluginDir()
-    self.control_script = self.plugin_dir .. "bin/wg-control.sh"
-    
-    local settings_path = DataStorage:getSettingsDir() .. "/wireguard_settings.lua"
-    self.settings = LuaSettings:open(settings_path)
-
     self.ui.menu:registerToMainMenu(self)
+    self:onDispatcherRegisterActions()
 
-    if self.settings:isTrue("autoconnect") then
+    if G_reader_settings:isTrue("wireguard_autoconnect") then
         UIManager:scheduleIn(3, function()
             self:connect(true)
         end)
@@ -33,7 +24,7 @@ function WireGuard:init()
 end
 
 function WireGuard:execCmd(action)
-    local cmd = string.format("/bin/sh %q %s", self.control_script, action)
+    local cmd = string.format("/bin/sh %q %s", CONTROL_SCRIPT, action)
     local handle = io.popen(cmd)
     if not handle then return "" end
     local output = handle:read("*a") or ""
@@ -96,9 +87,18 @@ function WireGuard:showStatus()
 end
 
 function WireGuard:onExit()
-    if self.settings:isTrue("autodisconnect") and self:isConnected() then
+    if G_reader_settings:isTrue("wireguard_autodisconnect") and self:isConnected() then
         self:execCmd("down")
     end
+end
+
+function WireGuard:onDispatcherRegisterActions()
+    Dispatcher:registerAction("toggle_wireguard_vpn", {
+        category = "none",
+        event = "ToggleWireGuardVPN",
+        title = _("Toggle WireGuard VPN"),
+        general = true,
+    })
 end
 
 function WireGuard:addToMainMenu(menu_items)
@@ -108,48 +108,57 @@ function WireGuard:addToMainMenu(menu_items)
         sub_item_table = {
             {
                 text = _("▶ Conectar VPN"),
+                keep_menu_open = true,
                 enabled_func = function()
                     return not self:isConnected()
                 end,
-                callback = function()
+                callback = function(touchmenu_instance)
                     self:connect(false)
+                    if touchmenu_instance then touchmenu_instance:updateItems() end
                 end,
             },
             {
                 text = _("■ Desconectar VPN"),
+                keep_menu_open = true,
                 enabled_func = function()
                     return self:isConnected()
                 end,
-                callback = function()
+                callback = function(touchmenu_instance)
                     self:disconnect()
+                    if touchmenu_instance then touchmenu_instance:updateItems() end
                 end,
             },
             {
                 text = _("ℹ Estado del Túnel"),
+                keep_menu_open = true,
                 callback = function()
                     self:showStatus()
                 end,
             },
             {
                 text = _("⚡ Conectar al iniciar KOReader"),
+                keep_menu_open = true,
                 checked_func = function()
-                    return self.settings:isTrue("autoconnect")
+                    return G_reader_settings:isTrue("wireguard_autoconnect")
                 end,
-                callback = function()
-                    local cur = self.settings:isTrue("autoconnect")
-                    self.settings:saveSetting("autoconnect", not cur)
-                    self.settings:flush()
+                callback = function(touchmenu_instance)
+                    local cur = G_reader_settings:isTrue("wireguard_autoconnect")
+                    G_reader_settings:saveSetting("wireguard_autoconnect", not cur)
+                    G_reader_settings:flush()
+                    if touchmenu_instance then touchmenu_instance:updateItems() end
                 end,
             },
             {
                 text = _("⏹ Desconectar al salir de KOReader"),
+                keep_menu_open = true,
                 checked_func = function()
-                    return self.settings:isTrue("autodisconnect")
+                    return G_reader_settings:isTrue("wireguard_autodisconnect")
                 end,
-                callback = function()
-                    local cur = self.settings:isTrue("autodisconnect")
-                    self.settings:saveSetting("autodisconnect", not cur)
-                    self.settings:flush()
+                callback = function(touchmenu_instance)
+                    local cur = G_reader_settings:isTrue("wireguard_autodisconnect")
+                    G_reader_settings:saveSetting("wireguard_autodisconnect", not cur)
+                    G_reader_settings:flush()
+                    if touchmenu_instance then touchmenu_instance:updateItems() end
                 end,
             },
         },
