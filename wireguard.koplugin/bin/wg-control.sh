@@ -63,7 +63,12 @@ parse_config() {
 
     WG_ADDR=$(grep -i '^[[:space:]]*Address[[:space:]]*=' "$UNIX_CONF" | head -n 1 | cut -d '=' -f 2 | tr -d ' ' | cut -d ',' -f 1)
     WG_MTU=$(grep -i '^[[:space:]]*MTU[[:space:]]*=' "$UNIX_CONF" | head -n 1 | cut -d '=' -f 2 | tr -d ' ')
-    [ -z "$WG_MTU" ] && WG_MTU="1420"
+        if [ -z "$WG_MTU" ]; then
+        PHYS_MTU=$(cat /sys/class/net/wlan0/mtu 2>/dev/null || echo 1500)
+        WG_MTU=$((PHYS_MTU - 80))
+        [ "$WG_MTU" -lt 1280 ] && WG_MTU="1280"
+        [ "$WG_MTU" -gt 1360 ] && WG_MTU="1360"
+    fi
 
     ALLOWED_IPS=$(grep -i '^[[:space:]]*AllowedIPs[[:space:]]*=' "$UNIX_CONF" | cut -d '=' -f 2 | tr ',' ' ')
 
@@ -132,7 +137,9 @@ start_wg() {
     done
 
     iptables -C INPUT -i "$IFACE" -j ACCEPT 2>/dev/null || iptables -I INPUT -i "$IFACE" -j ACCEPT
-    iptables -C OUTPUT -o "$IFACE" -j ACCEPT 2>/dev/null || iptables -I OUTPUT -o "$IFACE" -j ACCEPT
+        iptables -C OUTPUT -o "$IFACE" -j ACCEPT 2>/dev/null || iptables -I OUTPUT -o "$IFACE" -j ACCEPT
+    iptables -t mangle -C POSTROUTING -p tcp --tcp-flags SYN,RST SYN -o "$IFACE" -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || \
+    iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -o "$IFACE" -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
 
     eink_msg "WG: CONECTADO ($WG_ADDR)"
 }
@@ -150,7 +157,8 @@ stop_wg() {
     fi
 
     iptables -D INPUT -i "$IFACE" -j ACCEPT 2>/dev/null
-    iptables -D OUTPUT -o "$IFACE" -j ACCEPT 2>/dev/null
+        iptables -D OUTPUT -o "$IFACE" -j ACCEPT 2>/dev/null
+    iptables -t mangle -D POSTROUTING -p tcp --tcp-flags SYN,RST SYN -o "$IFACE" -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
     ip link del "$IFACE" 2>/dev/null
     killall wireguard-go 2>/dev/null
 
