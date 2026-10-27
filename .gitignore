@@ -1,0 +1,7 @@
+﻿build/
+wireguard.koplugin/bin/wireguard-go
+wireguard.koplugin/bin/wg
+wireguard.koplugin/wg0.conf
+wireguard.koplugin/wireguard.log
+*.zip
+*.sha256
