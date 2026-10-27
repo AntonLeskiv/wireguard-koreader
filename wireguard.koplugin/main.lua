@@ -1,4 +1,4 @@
-﻿local WidgetContainer = require("ui/widget/container/widgetcontainer")
+local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local UIManager = require("ui/uimanager")
 local InfoMessage = require("ui/widget/infomessage")
 local Notification = require("ui/widget/notification")
@@ -104,6 +104,7 @@ end
 function WireGuard:addToMainMenu(menu_items)
     menu_items.wireguard = {
         text = _("WireGuard VPN"),
+        sorting_hint = "network",
         sub_item_table = {
             {
                 text = _("▶ Conectar VPN"),
